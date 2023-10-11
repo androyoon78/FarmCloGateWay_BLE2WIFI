@@ -1,3 +1,5 @@
+
+    
     /////////////////////////////////////////////////////////////////
    //     ESP32 & Xiaomi Bluetooth  sensor   Oct. 2020  v1.01     //
   //       Get the latest version of the code here:              //
@@ -31,7 +33,7 @@ boolean METRIC = true; //Set true for metric system; false for imperial
 BLEScan *pBLEScan;
 
 void IRAM_ATTR resetModule(){
-    ets_printf("reboot\n");
+    //ets_printf("reboot\n");
     esp_restart();
 }
 
@@ -128,14 +130,18 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 
 void setup() {
   
-  tft.begin();
+    tft.begin();
 
-  Serial.begin(115200);
-  Serial.println("ESP32 XIAOMI DISPLAY");
- 
-  initBluetooth();
+    Serial.begin(115200);
+    Serial.println("  __      _ _ _           ___  __  _ _ _ ");
+    Serial.println(" / _| _  | | | | _  __   | o )[o )| | | |");
+    Serial.println("( |_n/o\ | V V |/o\ \ V7 | o \ /( | V V |");
+    Serial.println(" \__/\_,] \_n_/ \_,] )/  |___//__| \_n_/ ");
+    Serial.println("                    //                   ");
 
-  drawUI();
+    initBluetooth();
+
+    drawUI();
 }
 
 void loop() {
