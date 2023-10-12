@@ -8,7 +8,12 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
+#include "version.h"
+
 #define SCAN_TIME  3 // seconds
+
+String uuid ="0";
+
 boolean METRIC = true; //Set true for metric system; false for imperial
 
 BLEScan *pBLEScan;
@@ -18,8 +23,8 @@ void IRAM_ATTR resetModule(){
     esp_restart();
 }
 
-float current_humidity = -100;
-float previous_humidity = -100;
+float current_moisture = -100;
+float previous_moisture = -100;
 float current_temperature = -100;
 float previous_temperature = -100;
 
@@ -36,8 +41,17 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 
             strServiceData.copy((char *)cServiceData, strServiceData.length(), 0);
 
-            Serial.printf("\n\nAdvertised Device: %s\n", advertisedDevice.toString().c_str());
-
+            //Serial.printf("\n\nAdvertised Device: %s\n", advertisedDevice.toString().c_str());
+            Serial.printf("\n\nAdvertised Name exists: %u\n", advertisedDevice.haveName());
+            Serial.printf("Device has ServiceData: %u\n", advertisedDevice.haveServiceData());
+            // 장치가 여러 개의 serviceUUID를 가지고 있다면 모두 출력
+            if(advertisedDevice.haveServiceUUID()) {
+                int serviceUUIDCount = advertisedDevice.getServiceUUIDCount();
+                for(int i = 0; i < serviceUUIDCount; i++) {
+                    Serial.printf("Service UUID %d: %s\n", i+1, advertisedDevice.getServiceUUID(i).toString().c_str());
+                }
+            }
+                
             for (int i=0;i<strServiceData.length();i++) {
                 sprintf(&charServiceData[i*2], "%02x", cServiceData[i]);
             }
@@ -51,6 +65,18 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
             char eventLog[256];
             unsigned long value, value2;
             char charValue[5] = {0,};
+
+            Serial.print("cServiceData: [");
+            for(int i = 0; i < strServiceData.length(); i++) {
+                Serial.printf("%02X", cServiceData[i]);
+                if (i != strServiceData.length() - 1) {
+                    Serial.print(", ");
+                }
+            }
+            Serial.println("]");
+
+            Serial.printf("===>>>>> %02X\r\n", cServiceData[11]);
+            
             switch (cServiceData[11]) {
                 case 0x04:
                     sprintf(charValue, "%02X%02X", cServiceData[15], cServiceData[14]);
@@ -67,9 +93,9 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                 case 0x06:
                     sprintf(charValue, "%02X%02X", cServiceData[15], cServiceData[14]);
                     value = strtol(charValue, 0, 16);  
-                    current_humidity = (float)value/10;
+                    current_moisture = (float)value/10;
                      
-                    Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value);
+                    Serial.printf("MOISTURE_EVENT: %s, %d\n", charValue, value);
                     break;
                 case 0x0A:
                     sprintf(charValue, "%02X", cServiceData[14]);
@@ -90,9 +116,9 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     Serial.printf("TEMPERATURE_EVENT: %s, %d\n", charValue, value);                    
                     sprintf(charValue, "%02X%02X", cServiceData[17], cServiceData[16]);
                     value2 = strtol(charValue, 0, 16);
-                    current_humidity = (float)value2/10;
+                    current_moisture = (float)value2/10;
                                   
-                    Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value2);
+                    Serial.printf("MOISTURE_EVENT: %s, %d\n", charValue, value2);
                     break;
             }
         }
@@ -126,11 +152,27 @@ void initBluetooth()
 void setup() {
   // put your setup code here, to run once:
     Serial.begin(115200);
+
+    sprintf(build_version, "%d%02d%02d%d", YEAR, MONTH + 1, DAY, DATE_AS_INT);
+
     Serial.println("");
 
-    Serial.println("■■┃■■■┃■■■┃■■■┃■■■┃■■■┃■■■■┃■■■");
-    Serial.println("┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻");
-    Serial.println("♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪");
+    Serial.printf("            ♪~ ♬ ♪♬~♪ ♪~ ♬ \r\n");
+    Serial.printf("──────▄▀▄─────▄▀▄ ♪♬~♪ ♪~ ♬\r\n");
+    Serial.printf("─────▄█░░▀▀▀▀▀░░█▄  ♪♬~♪ ♪~ ♬ ♪\r\n");
+    Serial.printf("─▄▄──█░░░░░░░░░░░█──▄▄ ID: %s\r\n", uuid);
+    Serial.printf("█▄▄█─█░░▀░░┬░░▀░░█─█▄▄█ GateWay B2W: %s\r\n", build_version);
+    Serial.printf("███████████████████████████████████████████████████████████\r\n");
+    Serial.printf("███████╗░█████╗░██████╗░███╗░░░███╗░█████╗░██╗░░░░░░█████╗░\r\n");
+    Serial.printf("██╔════╝██╔══██╗██╔══██╗████╗░████║██╔══██╗██║░░░░░██╔══██╗\r\n");
+    Serial.printf("█████╗░░███████║██████╔╝██╔████╔██║██║░░╚═╝██║░░░░░██║░░██║\r\n");
+    Serial.printf("██╔══╝░░██╔══██║██╔══██╗██║╚██╔╝██║██║░░██╗██║░░░░░██║░░██║\r\n");
+    Serial.printf("██║░░░░░██║░░██║██║░░██║██║░╚═╝░██║╚█████╔╝███████╗╚█████╔╝\r\n");
+    Serial.printf("╚═╝░░░░░╚═╝░░╚═╝╚═╝░░╚═╝╚═╝░░░░░╚═╝░╚════╝░╚══════╝░╚════╝░\r\n");
+    Serial.printf("███████████████████████████████████████████████████████████\r\n");
+    Serial.println("♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪♬~♪ ♪~ ♬ ♪♪♬~\r\n");
+    Serial.printf("==================================================================================================\r\n");
+
     initBluetooth();
 }
 
