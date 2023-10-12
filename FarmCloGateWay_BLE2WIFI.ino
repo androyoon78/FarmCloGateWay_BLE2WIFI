@@ -8,8 +8,7 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
-#define SCAN_TIME  10 // seconds
-
+#define SCAN_TIME  3 // seconds
 boolean METRIC = true; //Set true for metric system; false for imperial
 
 BLEScan *pBLEScan;
@@ -63,18 +62,18 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     {
                       current_temperature = CelciusToFahrenheit((float)value/10);
                     }
-
+ 
                     break;
                 case 0x06:
                     sprintf(charValue, "%02X%02X", cServiceData[15], cServiceData[14]);
                     value = strtol(charValue, 0, 16);  
                     current_humidity = (float)value/10;
-                  
+                     
                     Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value);
                     break;
                 case 0x0A:
                     sprintf(charValue, "%02X", cServiceData[14]);
-                    value = strtol(charValue, 0, 16);
+                    value = strtol(charValue, 0, 16);                    
                     Serial.printf("BATTERY_EVENT: %s, %d\n", charValue, value);
                     break;
                 case 0x0D:
@@ -87,12 +86,12 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     {
                       current_temperature = CelciusToFahrenheit((float)value/10);
                     }
-
+        
                     Serial.printf("TEMPERATURE_EVENT: %s, %d\n", charValue, value);                    
                     sprintf(charValue, "%02X%02X", cServiceData[17], cServiceData[16]);
                     value2 = strtol(charValue, 0, 16);
                     current_humidity = (float)value2/10;
-              
+                                  
                     Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value2);
                     break;
             }
@@ -100,43 +99,6 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     }
 };
 
-void setup() {
-  
-    tft.begin();
-
-    Serial.begin(115200);
-    Serial.println("  __      _ _ _           ___  __  _ _ _ ");
-    Serial.println(" / _| _  | | | | _  __   | o )[o )| | | |");
-    Serial.println("( |_n/o\ | V V |/o\ \ V7 | o \ /( | V V |");
-    Serial.println(" \__/\_,] \_n_/ \_,] )/  |___//__| \_n_/ ");
-    Serial.println("                    //                   ");
-
-    initBluetooth();
-}
-
-void loop() {
-  
-    char printLog[256];
-    Serial.printf("Start BLE scan for %d seconds...\n", SCAN_TIME);
-    BLEScan* pBLEScan = BLEDevice::getScan(); //create new scan
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
-    BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
-    int count = foundDevices.getCount();
-    printf("Found device count : %d\n", count);
-
-    delay(100);
-}
-
-void initBluetooth()
-{
-    BLEDevice::init("");
-    pBLEScan = BLEDevice::getScan(); //create new scan
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
-    pBLEScan->setInterval(0x50);
-    pBLEScan->setWindow(0x30);
-}
 
 String convertFloatToString(float f)
 {
@@ -149,4 +111,38 @@ float CelciusToFahrenheit(float Celsius)
  float Fahrenheit=0;
  Fahrenheit = Celsius * 9/5 + 32;
  return Fahrenheit;
+}
+
+void initBluetooth()
+{
+    BLEDevice::init("");
+    pBLEScan = BLEDevice::getScan(); //create new scan
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+    pBLEScan->setInterval(0x50);
+    pBLEScan->setWindow(0x30);
+}
+
+void setup() {
+  // put your setup code here, to run once:
+    Serial.begin(115200);
+    Serial.println("");
+
+    Serial.println("■■┃■■■┃■■■┃■■■┃■■■┃■■■┃■■■■┃■■■");
+    Serial.println("┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻┻");
+    Serial.println("♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪");
+    initBluetooth();
+}
+
+void loop() {
+    char printLog[256];
+    Serial.printf("Start BLE scan for %d seconds...\n", SCAN_TIME);
+    BLEScan* pBLEScan = BLEDevice::getScan(); //create new scan
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+    BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
+    int count = foundDevices.getCount();
+    printf("Found device count : %d\n", count);
+
+    delay(100);
 }
