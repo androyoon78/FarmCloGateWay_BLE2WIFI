@@ -1,21 +1,3 @@
-
-    
-    /////////////////////////////////////////////////////////////////
-   //     ESP32 & Xiaomi Bluetooth  sensor   Oct. 2020  v1.01     //
-  //       Get the latest version of the code here:              //
- //           http://educ8s.tv/esp32-xiaomi-hack                //
-/////////////////////////////////////////////////////////////////
-
-
-// IMPORTANT
-// You need to install this library as well else it won't work
-// https://github.com/fguiet/ESP32_BLE_Arduino
-
-
-#include "SPI.h"
-#include "Adafruit_GFX.h"      //https://github.com/adafruit/Adafruit-GFX-Library
-#include "Adafruit_ILI9341.h"  //https://github.com/adafruit/Adafruit_ILI9341
-
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_system.h"
@@ -26,31 +8,21 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
-#define SCAN_TIME  3 // seconds
+#define SCAN_TIME  10 // seconds
 
 boolean METRIC = true; //Set true for metric system; false for imperial
 
 BLEScan *pBLEScan;
 
 void IRAM_ATTR resetModule(){
-    //ets_printf("reboot\n");
+    ets_printf("reboot\n");
     esp_restart();
 }
-
-#define TFT_SCK    18
-#define TFT_MOSI   23
-#define TFT_MISO   19
-#define TFT_CS     5
-#define TFT_DC     22
-#define TFT_RESET  21
 
 float current_humidity = -100;
 float previous_humidity = -100;
 float current_temperature = -100;
 float previous_temperature = -100;
-
-//Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCK, TFT_RESET, TFT_MISO);
 
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice)
@@ -91,18 +63,18 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     {
                       current_temperature = CelciusToFahrenheit((float)value/10);
                     }
-                    displayTemperature();  
+
                     break;
                 case 0x06:
                     sprintf(charValue, "%02X%02X", cServiceData[15], cServiceData[14]);
                     value = strtol(charValue, 0, 16);  
                     current_humidity = (float)value/10;
-                    displayHumidity();                      
+                  
                     Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value);
                     break;
                 case 0x0A:
                     sprintf(charValue, "%02X", cServiceData[14]);
-                    value = strtol(charValue, 0, 16);                    
+                    value = strtol(charValue, 0, 16);
                     Serial.printf("BATTERY_EVENT: %s, %d\n", charValue, value);
                     break;
                 case 0x0D:
@@ -115,12 +87,12 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     {
                       current_temperature = CelciusToFahrenheit((float)value/10);
                     }
-                    displayTemperature();               
+
                     Serial.printf("TEMPERATURE_EVENT: %s, %d\n", charValue, value);                    
                     sprintf(charValue, "%02X%02X", cServiceData[17], cServiceData[16]);
                     value2 = strtol(charValue, 0, 16);
                     current_humidity = (float)value2/10;
-                    displayHumidity();                                        
+              
                     Serial.printf("HUMIDITY_EVENT: %s, %d\n", charValue, value2);
                     break;
             }
@@ -140,8 +112,6 @@ void setup() {
     Serial.println("                    //                   ");
 
     initBluetooth();
-
-    drawUI();
 }
 
 void loop() {
@@ -158,29 +128,6 @@ void loop() {
     delay(100);
 }
 
-void drawUI()
-{
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setTextSize(2);
-
-  tft.drawRoundRect(0, 0, 239 , 158, 4, ILI9341_WHITE);
-  tft.fillRoundRect(20, 1, 200, 40, 4, ILI9341_GREEN);
-
-  tft.drawRoundRect(0, 160, 239 , 158, 4, ILI9341_WHITE);
-  tft.fillRoundRect(20, 161, 200, 40, 4, ILI9341_CYAN);
-
-   tft.setCursor(55, 15);
-   tft.setTextColor(ILI9341_BLACK);
-   tft.setTextSize(2);
-
-   tft.print("TEMPERATURE");
-
-   tft.setCursor(70, 173);
-   tft.setTextColor(ILI9341_BLACK);
-   tft.setTextSize(2);
-   tft.print("HUMIDITY");
-}
-
 void initBluetooth()
 {
     BLEDevice::init("");
@@ -189,57 +136,6 @@ void initBluetooth()
     pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
     pBLEScan->setInterval(0x50);
     pBLEScan->setWindow(0x30);
-}
-
-void displayTemperature()
-{
-   if(current_temperature != previous_temperature)
-   {
-      tft.setCursor(65, 80);
-      tft.setTextColor(ILI9341_BLACK);
-      tft.setTextSize(4);
-      tft.print(convertFloatToString(previous_temperature));
-      
-      tft.setCursor(65, 80);
-      tft.setTextColor(ILI9341_WHITE);
-      tft.setTextSize(4);
-      tft.print(convertFloatToString(current_temperature));
-      
-      tft.setTextSize(2);
-      tft.setCursor(65, 80);
-      tft.setCursor(170, 75);
-      tft.print("o");
-      tft.setCursor(185, 80);
-      tft.setTextSize(4);
-      if(METRIC)
-      {
-        tft.print("C");
-      }else
-      {
-        tft.print("F");
-      }
-      
-      previous_temperature = current_temperature;
-   }
-}
-
-void displayHumidity()
-{
-   if(current_humidity != previous_humidity)
-   {
-      tft.setCursor(65, 240);
-      tft.setTextColor(ILI9341_BLACK);
-      tft.setTextSize(4);
-      tft.print(convertFloatToString(previous_humidity));
-      
-      tft.setCursor(65, 240);
-      tft.setTextColor(ILI9341_WHITE);
-      tft.setTextSize(4);
-      tft.print(convertFloatToString(current_humidity));
-      tft.print(" %");
-      
-      previous_humidity = current_humidity;
-   }
 }
 
 String convertFloatToString(float f)
