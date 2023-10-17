@@ -8,29 +8,53 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
+// Load Wi-Fi library
+#include <WiFi.h>
 #include "version.h"
-
-#define SCAN_TIME  3 // seconds
 
 String uuid ="0";
 
+
+// Replace with your network credentials
+const char* ssid = "JJHouse";
+const char* password = "01068015475";
+
+String farmCloSensor = "MJ_HT_V1";
+
+// Set web server port number to 80
+WiFiServer server(80);
+
+// Variable to store the HTTP request
+String header;
+
+// Current time
+unsigned long currentTime = millis();
+// Previous time
+unsigned long previousTime = 0; 
+// Define timeout time in milliseconds (example: 2000ms = 2s)
+const long timeoutTime = 2000;
+
+// for BLE and Bluetooth
+#define SCAN_TIME  3 // seconds
 boolean METRIC = true; //Set true for metric system; false for imperial
-
 BLEScan *pBLEScan;
-
-void IRAM_ATTR resetModule(){
-    ets_printf("reboot\n");
-    esp_restart();
-}
 
 float current_moisture = -100;
 float previous_moisture = -100;
 float current_temperature = -100;
 float previous_temperature = -100;
+float current_battery = -100;
+
+String convertFloatToString(float f);
+float CelciusToFahrenheit(float Celsius);
 
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice)
     {
+        //Serial.print(advertisedDevice.getName().c_str());
+        //Serial.print(" ");
+        //Serial.println(advertisedDevice.getAddress().toString().c_str());
+        
         if (advertisedDevice.haveName() && advertisedDevice.haveServiceData() && !advertisedDevice.getName().compare("MJ_HT_V1")) {
 
             int serviceDataCount = advertisedDevice.getServiceDataCount();
@@ -41,12 +65,14 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 
             strServiceData.copy((char *)cServiceData, strServiceData.length(), 0);
 
-            //Serial.printf("\n\nAdvertised Device: %s\n", advertisedDevice.toString().c_str());
-            Serial.printf("\n\nAdvertised Name exists: %u\n", advertisedDevice.haveName());
-            Serial.printf("Device has ServiceData: %u\n", advertisedDevice.haveServiceData());
+            Serial.printf("\n\nAdvertised Device: %s\n", advertisedDevice.getName().c_str());
+            //Serial.printf("\n\nAdvertised Name exists: %u\n", advertisedDevice.haveName());
+            //Serial.printf("Device has ServiceData: %u\n", advertisedDevice.haveServiceData());
+            
             // 장치가 여러 개의 serviceUUID를 가지고 있다면 모두 출력
             if(advertisedDevice.haveServiceUUID()) {
                 int serviceUUIDCount = advertisedDevice.getServiceUUIDCount();
+                Serial.printf("Device has %d Service \n", advertisedDevice.getServiceUUIDCount());
                 for(int i = 0; i < serviceUUIDCount; i++) {
                     Serial.printf("Service UUID %d: %s\n", i+1, advertisedDevice.getServiceUUID(i).toString().c_str());
                 }
@@ -99,8 +125,11 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
                     break;
                 case 0x0A:
                     sprintf(charValue, "%02X", cServiceData[14]);
-                    value = strtol(charValue, 0, 16);                    
+                    value = strtol(charValue, 0, 16);
                     Serial.printf("BATTERY_EVENT: %s, %d\n", charValue, value);
+
+                    current_battery = ((float)value / 255.0) * 100; // value를 100분율로 변환
+                    Serial.printf("Current Battery: %.2f%%\n", current_battery);
                     break;
                 case 0x0D:
                     sprintf(charValue, "%02X%02X", cServiceData[15], cServiceData[14]);
@@ -125,7 +154,6 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     }
 };
 
-
 String convertFloatToString(float f)
 {
   String s = String(f,1);
@@ -144,18 +172,15 @@ void initBluetooth()
     BLEDevice::init("");
     pBLEScan = BLEDevice::getScan(); //create new scan
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+    pBLEScan->setActiveScan(false); //active scan uses more power, but get results faster
     pBLEScan->setInterval(0x50);
     pBLEScan->setWindow(0x30);
 }
 
 void setup() {
-  // put your setup code here, to run once:
     Serial.begin(115200);
 
     sprintf(build_version, "%d%02d%02d%d", YEAR, MONTH + 1, DAY, DATE_AS_INT);
-
-    Serial.println("");
 
     Serial.printf("            ♪~ ♬ ♪♬~♪ ♪~ ♬ \r\n");
     Serial.printf("──────▄▀▄─────▄▀▄ ♪♬~♪ ♪~ ♬\r\n");
@@ -172,19 +197,127 @@ void setup() {
     Serial.printf("███████████████████████████████████████████████████████████\r\n");
     Serial.println("♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪♬~♪ ♪~ ♬ ♪♪♬~\r\n");
     Serial.printf("==================================================================================================\r\n");
-
+    
+    // Connect to Wi-Fi network with SSID and password
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+    }
+  
+    
+    // Print local IP address and start web server
+    Serial.println("");
+    Serial.println("WiFi connected.");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+    server.begin();
+  
     initBluetooth();
 }
 
-void loop() {
+void loop()
+{
+    WiFiClient client = server.available(); // Listen for incoming clients
     char printLog[256];
     Serial.printf("Start BLE scan for %d seconds...\n", SCAN_TIME);
-    BLEScan* pBLEScan = BLEDevice::getScan(); //create new scan
+    BLEScan *pBLEScan = BLEDevice::getScan(); // create new scan
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+    pBLEScan->setActiveScan(true); // active scan uses more power, but get results faster
     BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
     int count = foundDevices.getCount();
     printf("Found device count : %d\n", count);
+  
+    if (client)
+    {
+      // Check if the client has sent a request
+      if (client.available())
+      {
+        // Read the HTTP request line by line
+        while (client.available())
+        {
+          char c = client.read();
+          header += c;
+          if (c == '\n')
+          {
+            // End of the HTTP request
+            break;
+          }
+        }
+  
+        // Clear the header variable
+        header = "";
+      }
+  
+      // Send the HTTP response to the client
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-type:text/html");
+      client.println("Connection: close");
+      //client.println("Refresh: 5"); // 5초마다 페이지 자동 새로 고침
+      client.println("<meta http-equiv='refresh' content='5'>");
+      client.println();
+      
+      // HTML 코드
+      client.println("<!DOCTYPE html><html>");
+      client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+      client.println("<link rel=\"icon\" href=\"data:,\">");
+      client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
+      client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 16px 40px;");
+      client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
+      client.println(".button2 {background-color: #555555;}</style></head>");
+      client.println("<body><h1>Farmclo Web Server</h1>");
+      
+      // Display Bluetooth Devices for farmCloSensor
+      client.println("<h2>Bluetooth Devices for farmCloSensor:</h2>");
+      client.println("<div style='text-align:center;'>"); // 텍스트를 중앙 정렬하는 div 요소 시작
+      client.println("<table border='1' style='margin:0 auto;'>"); // 테이블을 가운데 정렬하고자 하는 스타일 추가
+      client.println("<tr><th>Name</th><th>Address</th></tr>");
+      for (int i = 0; i < count; i++) {
+        BLEAdvertisedDevice device = foundDevices.getDevice(i);
+        bool nameReceived = device.haveName();
+    
+        // Check if the device's name matches farmCloSensor
+        if (nameReceived && device.getName() == farmCloSensor.c_str()) {
+          client.println("<tr>");
+          client.print("<td>");
+          client.print(device.getName().c_str()); 
+          client.print("</td>");
+          client.print("<td>");
+          client.print(device.getAddress().toString().c_str());
+          client.print("</td>");
+          client.println("</tr>");
+        }
+      }
+      client.println("</table>");
+      client.println("</div>");
 
-    delay(100);
+           client.println("<h2>Device Data:</h2>");
+      client.println("<div style='text-align:center;'>");
+      client.println("<table border='1' style='margin:0 auto;'>");
+      client.println("<tr><th>Temperature</th><th>Moisture</th><th>Battery</th></tr>");
+
+      client.println("<tr>");
+      client.printf("<td>%.2f°C</td>", current_temperature);
+      client.printf("<td>%.2f%%</td>", current_moisture);
+      client.printf("<td>%.2f%%</td>", current_battery);
+      client.println("</tr>");
+
+      client.println("</table>");
+      client.println("</div>"); // div 요소 끝
+
+      // Close the HTML page
+      client.println("</body></html>");
+      
+      // Close the client connection
+      client.stop();
+  }
+
+  Serial.println("-------------------------------------------------");
+  Serial.printf("Temperature: %.2f\n", current_temperature);
+  Serial.printf("Moisture: %.2f\n", current_moisture);
+  if (current_battery > 0)
+    Serial.printf("Battery: %f\n", current_battery);
+  Serial.println("-------------------------------------------------");
 }
