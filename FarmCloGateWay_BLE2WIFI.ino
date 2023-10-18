@@ -23,6 +23,7 @@ String farmCloSensor = "MJ_HT_V1";
 
 // Set web server port number to 80
 WiFiServer server(80);
+WiFiClient client;
 
 // Variable to store the HTTP request
 String header;
@@ -173,8 +174,8 @@ void initBluetooth()
     pBLEScan = BLEDevice::getScan(); //create new scan
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
     pBLEScan->setActiveScan(false); //active scan uses more power, but get results faster
-    pBLEScan->setInterval(0x50);
-    pBLEScan->setWindow(0x30);
+    pBLEScan->setInterval(0xA0);
+    pBLEScan->setWindow(0x60);
 }
 
 void setup() {
@@ -186,7 +187,7 @@ void setup() {
     Serial.printf("──────▄▀▄─────▄▀▄ ♪♬~♪ ♪~ ♬\r\n");
     Serial.printf("─────▄█░░▀▀▀▀▀░░█▄  ♪♬~♪ ♪~ ♬ ♪\r\n");
     Serial.printf("─▄▄──█░░░░░░░░░░░█──▄▄ ID: %s\r\n", uuid);
-    Serial.printf("█▄▄█─█░░▀░░┬░░▀░░█─█▄▄█ GateWay B2W: %s\r\n", build_version);
+    Serial.printf("█▄▄█─█░░▀░░┬░░▀░░█─█▄▄█ \r\n");
     Serial.printf("███████████████████████████████████████████████████████████\r\n");
     Serial.printf("███████╗░█████╗░██████╗░███╗░░░███╗░█████╗░██╗░░░░░░█████╗░\r\n");
     Serial.printf("██╔════╝██╔══██╗██╔══██╗████╗░████║██╔══██╗██║░░░░░██╔══██╗\r\n");
@@ -197,7 +198,11 @@ void setup() {
     Serial.printf("███████████████████████████████████████████████████████████\r\n");
     Serial.println("♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪♬~♪ ♪~ ♬ ♪ ♪♬~♪ ♪~ ♬ ♪♪♬~\r\n");
     Serial.printf("==================================================================================================\r\n");
-    
+    Serial.printf("\t << Product: FarmCLo Gateway B2W (GBW) >>\r\n");
+    Serial.printf("\t << Version: %s >>\r\n", build_version);
+    Serial.printf("\t Current CPU frq = %d Mhz\r\n", getCpuFrequencyMhz());
+    Serial.printf("\t Date : %s %s\r\n", __DATE__, __TIME__);
+
     // Connect to Wi-Fi network with SSID and password
     Serial.print("Connecting to ");
     Serial.println(ssid);
@@ -218,18 +223,21 @@ void setup() {
     initBluetooth();
 }
 
+
 void loop()
 {
-    WiFiClient client = server.available(); // Listen for incoming clients
-    char printLog[256];
+    client = server.available(); // Listen for incoming clients
+/*
     Serial.printf("Start BLE scan for %d seconds...\n", SCAN_TIME);
     BLEScan *pBLEScan = BLEDevice::getScan(); // create new scan
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+*/
     pBLEScan->setActiveScan(true); // active scan uses more power, but get results faster
+
     BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
     int count = foundDevices.getCount();
     printf("Found device count : %d\n", count);
-  
+
     if (client)
     {
       // Check if the client has sent a request
@@ -314,10 +322,77 @@ void loop()
       client.stop();
   }
 
-  Serial.println("-------------------------------------------------");
-  Serial.printf("Temperature: %.2f\n", current_temperature);
-  Serial.printf("Moisture: %.2f\n", current_moisture);
-  if (current_battery > 0)
-    Serial.printf("Battery: %f\n", current_battery);
-  Serial.println("-------------------------------------------------");
+  if ((current_temperature != -100) && (current_moisture != -100))
+  {
+    Serial.println("-------------------------------------------------");
+    Serial.printf("Temperature: %.2f\n", current_temperature);
+    Serial.printf("Moisture: %.2f\n", current_moisture);
+    if (current_battery > 0)
+    {
+      Serial.printf("Battery: %f\n", current_battery);
+      SendDataToServer();
+    }
+
+    Serial.println("-------------------------------------------------");
+    
+  }
+  
+
+  /*
+  for(int i=0; i<60; i++)
+  {
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println(".");
+  */
+
+  
+}
+
+char serverip[100];
+const char* serverHttp = "http://";
+char* serverMainName = "farmclo.com";
+const char* serverSubName = "/api/v2/sensing/";
+char *serverPort = "4040";
+int portNumber = 0;
+long rssi = 0;
+
+void SendDataToServer()
+{
+    String postUrl;
+    String postStr;
+
+    Serial.println("FarmClo GateWay B2W");
+    postUrl = serverSubName + uuid;
+    postStr ="temperature=";
+    postStr += String(current_temperature);
+    postStr +="&moisture=";
+    postStr += String(current_moisture);
+    postStr +="&battery=";
+    postStr +=String(current_battery);
+    postStr +="&fwversion=";
+    postStr += build_version;
+    postStr +="&rssi=";
+    postStr += String(WiFi.RSSI());
+
+    if(client.connect(serverip, portNumber))
+    {
+        Serial.println("[client.connect]FarmClo GateWay B2W");
+            
+        client.println("POST " + postUrl + " HTTP/1.1");
+        client.println("Host: " + String(serverip) + ":" + portNumber);
+        client.println("Content-Type: application/x-www-form-urlencoded");
+        client.print("Content-Length: ");
+        client.println(postStr.length());
+        client.println();
+        client.print(postStr);
+    } else {
+        Serial.println("[client.connect] failed");
+    }
+    Serial.println(String(serverip) + ":" + String(portNumber) + postUrl + "?" + postStr);
+
+    if (client.connected()) {
+        client.stop();
+    }
 }
